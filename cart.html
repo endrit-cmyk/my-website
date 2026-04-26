@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Cart - InventoryPro</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .cart-container{max-width:1000px;margin:2rem auto;padding:1rem}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:.75rem;text-align:left;border-bottom:1px solid #eee}
+    .qty-controls button{margin:0 .25rem}
+    .totals{display:flex;justify-content:flex-end;margin-top:1rem;gap:2rem}
+    .btn-primary{background:#2b6cb0;color:#fff;border:none;padding:.6rem 1rem;border-radius:6px;cursor:pointer}
+    .btn-primary:hover{opacity:.95}
+    .btn-danger{background:#e53e3e;color:#fff;border:none;padding:.4rem .8rem;border-radius:6px;cursor:pointer}
+    .empty{padding:2rem;text-align:center;color:#666}
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <div class="logo">Inventory<span style="font-weight:700">Pro</span></div>
+        <nav class="nav-desktop">
+          <a href="/">Home</a>
+          <a href="/index.html">Inventory</a>
+          <a href="/cart.html" style="font-weight:600">Cart</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="cart-container">
+    <h1>Your Cart</h1>
+    <div id="cartContent">
+      <p class="empty">Loading cart...</p>
+    </div>
+    <div style="margin-top:1rem;display:flex;justify-content:space-between;align-items:center">
+      <div id="cartSummary"></div>
+      <div>
+        <button id="buyBtn" class="btn-primary">Buy</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Local static products mapping (matches frontend/scriptt.js)
+    const staticProducts = [
+      { _id: 's1', name: 'MacBook Pro 16"', price: '$2,499.00' },
+      { _id: 's2', name: 'Dell UltraSharp Monitor', price: '$899.00' },
+      { _id: 's3', name: 'Mechanical Keyboard', price: '$149.00' },
+      { _id: 's4', name: 'Wireless Headphones', price: '$349.00' },
+      { _id: 's5', name: 'HP EliteBook Laptop', price: '$1,799.00' },
+      { _id: 's6', name: 'Samsung Curved Monitor', price: '$699.00' },
+      { _id: 's7', name: 'Chair', price: '$199.00' }
+    ];
+
+    function parsePrice(price){
+      if (typeof price === 'number') return price;
+      if (!price) return 0;
+      const p = String(price).replace(/[^0-9.\-\.]/g,'');
+      return parseFloat(p) || 0;
+    }
+
+    function showEmpty(){
+      document.getElementById('cartContent').innerHTML = '<p class="empty">Your cart is empty.</p>';
+      document.getElementById('cartSummary').textContent = '';
+    }
+
+    async function loadCart(){
+      const token = localStorage.getItem('token');
+      if(!token){
+        document.getElementById('cartContent').innerHTML = '<p class="empty">Please login to see your cart. <a href="/username">Login</a></p>';
+        return;
+      }
+      try{
+        const res = await fetch('/api/cart', { headers: { 'Authorization': 'Bearer ' + token }});
+        if(!res.ok) throw new Error('Failed to fetch cart');
+        const items = await res.json();
+        // fetch DB products to try to resolve product details for cart items
+        let dbProducts = [];
+        try{
+          const pRes = await fetch('/api/products');
+          if(pRes.ok) dbProducts = await pRes.json();
+        }catch(e){}
+
+        const productsMap = {};
+        dbProducts.forEach(p => { productsMap[String(p._id)] = p; });
+        staticProducts.forEach(p => { productsMap[String(p._id)] = p; });
+
+        // attach product objects when possible
+        const normalized = items.map(it => {
+          const pid = it.productId;
+          if(pid && typeof pid === 'object') return it; // already populated
+          const prod = productsMap[String(pid)];
+          if(prod) it.productId = prod;
+          return it;
+        });
+
+        renderCart(normalized);
+        updateNavCounts(normalized);
+      }catch(err){
+        console.error(err);
+        document.getElementById('cartContent').innerHTML = '<p class="empty">Unable to load cart.</p>';
+      }
+    }
+
+    function updateNavCounts(items){
+      const totalItems = items.reduce((s,i)=>s + (i.quantity||0),0);
+      // update counters on index nav if present (if design uses them)
+      const cd = document.getElementById('cartCountDesktop');
+      const cm = document.getElementById('cartCountMobile');
+      if(cd) cd.textContent = totalItems;
+      if(cm) cm.textContent = totalItems;
+    }
+
+    function renderCart(items){
+      if(!items || items.length===0){ showEmpty(); return; }
+      // build table
+      const rows = items.map(item=>{
+        const prod = item.productId;
+        const price = parsePrice(prod && prod.price);
+        const qty = item.quantity||0;
+        const subtotal = price * qty;
+        const disabled = (prod && (prod.status === 'out_of_stock' || prod.stockQuantity===0)) ? 'disabled' : '';
+        return `<tr data-id="${item._id}">
+          <td>${prod ? prod.name : 'Product'}</td>
+          <td>${prod ? (typeof prod.price==='number'? prod.price : prod.price) : ''}</td>
+          <td class="qty-controls">${qty}</td>
+          <td>${subtotal.toFixed(2)}</td>
+          <td><button class="btn-danger" data-id="${item._id}">Remove</button></td>
+        </tr>`;
+      });
+
+      const table = `<table>
+        <thead><tr><th>Name</th><th>Price</th><th>Quantity</th><th>Subtotal</th><th></th></tr></thead>
+        <tbody>${rows.join('')}</tbody>
+      </table>`;
+      document.getElementById('cartContent').innerHTML = table;
+
+      // totals
+      const totalItems = items.reduce((s,i)=>s + (i.quantity||0),0);
+      const totalPrice = items.reduce((s,i)=> s + ((i.productId? parsePrice(i.productId.price):0) * (i.quantity||0)),0);
+      document.getElementById('cartSummary').innerHTML = `Total items: <strong>${totalItems}</strong> &nbsp;&nbsp; Total price: <strong>${totalPrice.toFixed(2)}</strong>`;
+
+      // attach remove handlers
+      document.querySelectorAll('.btn-danger').forEach(btn=> btn.addEventListener('click', removeItem));
+    }
+
+    async function removeItem(e){
+      const id = e.currentTarget.dataset.id;
+      const token = localStorage.getItem('token');
+      if(!token) return alert('Please login');
+      try{
+        const res = await fetch('/api/cart/'+id, { method:'DELETE', headers:{ 'Authorization':'Bearer '+token }});
+        if(!res.ok) throw new Error('Failed to remove');
+        alert('Item removed');
+        loadCart();
+      }catch(err){ console.error(err); alert('Unable to remove item'); }
+    }
+
+    async function buyAll(){
+      const token = localStorage.getItem('token');
+      if(!token) return alert('Please login');
+      try{
+        const res = await fetch('/api/cart', { headers:{ 'Authorization':'Bearer '+token }});
+        if(!res.ok) throw new Error('Failed to fetch cart for purchase');
+        const items = await res.json();
+        if(!items || items.length===0) return alert('Cart is empty');
+        // delete each item
+        for(const it of items){
+          await fetch('/api/cart/'+it._id, { method:'DELETE', headers:{ 'Authorization':'Bearer '+token }});
+        }
+        alert('Purchase completed successfully!');
+        loadCart();
+      }catch(err){ console.error(err); alert('Purchase failed: '+ (err.message||'')); }
+    }
+
+    document.getElementById('buyBtn').addEventListener('click', buyAll);
+    window.addEventListener('storage', (e)=>{ if(e.key === 'cartUpdated') loadCart(); });
+    document.addEventListener('DOMContentLoaded', ()=>{ loadCart(); });
+  </script>
+</body>
+</html>

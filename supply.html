@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Furnizo Produkt</title>
+<link rel="stylesheet" href="supply.css">
+</head>
+<body>
+  <header>
+    <h1>Supply Product</h1>
+    <button class="btn-back" onclick="window.location.href='index.html'">Back to Inventory</button>
+  </header>
+
+  <main>
+    <div class="supply-container">
+      <!-- Produkt preview -->
+      <div class="product-preview">
+        <img id="productPreview" src="https://via.placeholder.com/200" alt="Product Image">
+        <div class="product-info">
+          <h2 id="productName">Choose a product</h2>
+          <p id="productCategory"></p>
+          <p id="productPrice"></p>
+        </div>
+      </div>
+
+      <!-- Form për furnizim -->
+      <form id="supply-form">
+        <div class="form-group">
+          <label>Choose Product</label>
+          <select id="productId" name="productId" required></select>
+        </div>
+        <div class="form-group">
+          <label>Quantity</label>
+          <input type="number" name="quantity" min="1" value="1" required>
+        </div>
+        <button type="submit" class="btn-primary">Add Supply</button>
+      </form>
+    </div>
+  </main>
+
+  <script src="supply.js"></script>
+</body>
+</html>
